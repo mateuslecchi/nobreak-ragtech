@@ -179,7 +179,7 @@ dependencies = [
 
 [[package]]
 name = "nobreak-ragtech"
-version = "0.12.2"
+version = "0.13.1"
 dependencies = [
  "mime_guess",
  "rust-embed",

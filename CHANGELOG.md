@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.13.1 (15/nov/2026)
+- **Build:** o `backend/Cargo.lock` ficou fora do commit da 0.13.0 e o CI (`cargo test --locked`) recusou atualizá-lo. Mesmo conteúdo da 0.13.0, publicada com o lock versionado.
+
 ## 0.13.0 (15/nov/2026)
 Primeira queda de energia real com a política de desligamento armada (Moon, 22 min sem rede) e a projeção errou para baixo.
 - **Assentamento da queda** (`NOBREAK_DESLIGAR_ASSENTAR_S`, padrão **60 s**): nos primeiros segundos a bateria é estimada por tensão (`0x87::32`) e afunda por resistência interna, não por consumo — na queda de 15/nov foram **100 %→64 % em 33 s** (68–103 %/min aparentes) contra os **~9,7 %/min** medidos em 30/out. A projeção acreditava nesse afundamento, calculava autonomia de ~40 s e desligava o host em meio minuto. Agora a taxa só passa a valer depois do assentamento, usando como referência a bateria medida no fim dele; durante o transiente valem apenas os gatilhos absolutos (piso de bateria e teto de tempo).
