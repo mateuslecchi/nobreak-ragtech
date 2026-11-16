@@ -55,7 +55,8 @@ Sem Docker, baixe o binário em [Releases](../../releases) e rode `./nobreak-rag
 | `NOBREAK_DESLIGAR_MARGEM_S` | `120` | Desliga quando a autonomia projetada (pela taxa de queda medida) cai a este valor |
 | `NOBREAK_DESLIGAR_BATERIA_PCT` | `40` | Piso absoluto de bateria, para o início da queda |
 | `NOBREAK_DESLIGAR_PISO_PCT` | `15` | Bateria considerada vazia na projeção |
-| `NOBREAK_DESLIGAR_DADOS_MINIMOS_S` | `20` | Tempo de queda necessário para projetar |
+| `NOBREAK_DESLIGAR_DADOS_MINIMOS_S` | `20` | Tempo de queda necessário para projetar (contado a partir do fim do assentamento) |
+| `NOBREAK_DESLIGAR_ASSENTAR_S` | `60` | Tempo de queda em que a projeção fica desligada. A bateria afunda por resistência interna nos primeiros segundos e a taxa aparente chega a 100 %/min; durante o assentamento valem só o piso de bateria e o teto de tempo. `0` volta ao comportamento antigo |
 | `NOBREAK_DESLIGAR_TEMPO_S` | `180` | Teto de tempo em bateria |
 | `NOBREAK_DESLIGAR_CONFIRMA_S` | `10` | Confirmação dos gatilhos por piso/tempo |
 | `NOBREAK_DESLIGAR_AVISO_S` | `20` | Contagem regressiva máxima (encolhe com pouca autonomia) |

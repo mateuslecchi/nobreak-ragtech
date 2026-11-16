@@ -71,6 +71,14 @@ pub struct Config {
     pub piso_pct: f32,
     /// Tempo mínimo em bateria antes de acreditar na taxa de queda.
     pub dados_minimos_s: u64,
+    /// Tempo de queda ignorado pela projeção ("assentamento").
+    ///
+    /// Nos primeiros segundos a bateria é estimada por tensão (`0x87`) e afunda por
+    /// resistência interna, não por consumo: na queda de 15/nov/2026 foram 100 %→64 % em
+    /// 33 s contra ~9,7 %/min reais. Projetar nessa janela inventa autonomia de meia dúzia
+    /// de segundos e desliga o host cedo demais. Durante o assentamento só valem os
+    /// gatilhos absolutos (piso de bateria e teto de tempo).
+    pub assentar_s: u64,
     /// Arquivo onde o pedido é escrito. Vazio = não escreve (só evento/métrica).
     pub arquivo: Option<String>,
 }
@@ -86,6 +94,7 @@ impl Default for Config {
             aviso_s: 20,
             piso_pct: 15.0,
             dados_minimos_s: 20,
+            assentar_s: 60,
             arquivo: None,
         }
     }
@@ -114,9 +123,18 @@ pub fn projetar(
     Some(((restante_pct / taxa * 60.0) as u64, taxa))
 }
 
+/// Bateria medida no fim do assentamento: base da taxa projetada.
+#[derive(Debug, Clone, Copy)]
+struct Referencia {
+    em_s: u64,
+    pct: f32,
+}
+
 #[derive(Debug, Default)]
 pub struct Politica {
     pub cfg: Config,
+    /// Bateria no fim do assentamento (`None` até a queda passar do transiente).
+    referencia: Option<Referencia>,
     fase: Fase,
     /// Desde quando a condição perigosa é verdadeira, sem interrupção.
     perigo_desde: Option<u64>,
@@ -140,6 +158,8 @@ pub struct Situacao {
     pub restante_s: Option<u64>,
     /// Autonomia estimada pela taxa de queda atual (None fora de queda ou sem dados).
     pub autonomia_s: Option<u64>,
+    /// A taxa em uso já passou do assentamento inicial (já dá para confiar nela).
+    pub assentado: bool,
 }
 
 impl Politica {
@@ -164,6 +184,7 @@ impl Politica {
                 self.aviso_efetivo_s.saturating_sub(usado)
             }),
             autonomia_s: self.autonomia_s,
+            assentado: self.referencia.is_some(),
         }
     }
 
@@ -174,18 +195,9 @@ impl Politica {
         }
         if !l.em_queda {
             self.autonomia_s = None;
+            self.referencia = None;
         }
-        let projecao = if l.em_queda {
-            projetar(
-                l.bateria_inicio_pct,
-                l.bateria_pct,
-                l.em_bateria_s,
-                self.cfg.piso_pct,
-                self.cfg.dados_minimos_s,
-            )
-        } else {
-            None
-        };
+        let projecao = if l.em_queda { self.projetar(l) } else { None };
         if let Some((s, _)) = projecao {
             self.autonomia_s = Some(s);
         }
@@ -260,6 +272,38 @@ impl Politica {
         Some(self.pedir(t, motivo, l))
     }
 
+    /// Projeção da queda atual, medida depois do assentamento.
+    ///
+    /// Sem assentamento (`assentar_s == 0`) vale o caminho antigo: taxa desde o início da
+    /// queda. Com assentamento, a referência passa a ser a bateria no instante em que ele
+    /// termina — é o único jeito de não confundir afundamento de tensão com consumo.
+    fn projetar(&mut self, l: Leitura) -> Option<(u64, f32)> {
+        if self.cfg.assentar_s == 0 {
+            return projetar(
+                l.bateria_inicio_pct,
+                l.bateria_pct,
+                l.em_bateria_s,
+                self.cfg.piso_pct,
+                self.cfg.dados_minimos_s,
+            );
+        }
+        if l.em_bateria_s < self.cfg.assentar_s {
+            self.referencia = None;
+            return None;
+        }
+        let r = *self.referencia.get_or_insert(Referencia {
+            em_s: l.em_bateria_s,
+            pct: l.bateria_pct,
+        });
+        projetar(
+            r.pct,
+            l.bateria_pct,
+            l.em_bateria_s.saturating_sub(r.em_s),
+            self.cfg.piso_pct,
+            self.cfg.dados_minimos_s,
+        )
+    }
+
     /// Grava o pedido (quando há arquivo configurado) e vira `Fase::Pedido`.
     fn pedir(&mut self, t: u64, motivo: String, l: Leitura) -> Evento {
         self.fase = Fase::Pedido;
@@ -304,8 +348,16 @@ mod testes {
             aviso_s: 20,
             piso_pct: 15.0,
             dados_minimos_s: 20,
+            assentar_s: 0,
             arquivo: None,
         }
+    }
+
+    fn politica_com_assentamento(assentar_s: u64) -> Politica {
+        Politica::nova(Config {
+            assentar_s,
+            ..cfg()
+        })
     }
 
     fn politica() -> Politica {
@@ -505,5 +557,72 @@ mod testes {
         assert!(txt.contains("sem_rede_s\":30"), "{txt}");
         assert!(txt.starts_with("{\"t\":30,"), "{txt}");
         let _ = std::fs::remove_file(&arq);
+    }
+
+    /// Bateria estimada por tensão na queda real de 15/nov/2026: 100 %→64 % em ~30 s e
+    /// depois parada. Projetar dentro desse transiente inventa autonomia de segundos.
+    fn queda_de_15_nov(t: u64) -> f32 {
+        match t {
+            0 => 100.0,
+            10 => 88.0,
+            20 => 70.0,
+            30..=34 => 64.0,
+            _ => 64.0,
+        }
+    }
+
+    #[test]
+    fn assentamento_ignora_o_afundamento_inicial() {
+        let mut sem = politica_com_assentamento(0);
+        let mut avisou = false;
+        for t in (0..=120).step_by(5) {
+            if sem
+                .avaliar(t, queda(queda_de_15_nov(t), 100.0, t))
+                .is_some()
+            {
+                avisou = true;
+                break;
+            }
+        }
+        assert!(
+            avisou,
+            "sem assentamento o aviso vem em segundos (bug de 15/nov)"
+        );
+
+        let mut com = politica_com_assentamento(60);
+        for t in (0..=120).step_by(5) {
+            assert_eq!(
+                com.avaliar(t, queda(queda_de_15_nov(t), 100.0, t)),
+                None,
+                "com assentamento não pode haver evento em t={t}"
+            );
+            assert_eq!(com.situacao(t).assentado, t >= 60, "assentado em t={t}");
+        }
+        assert_eq!(com.situacao(120).fase, Fase::Normal);
+    }
+
+    #[test]
+    fn assentamento_ainda_desliga_com_queda_de_verdade() {
+        // Depois do transiente a bateria cai de verdade (40 %/min): aí a projeção vale.
+        let mut p = Politica::nova(Config {
+            assentar_s: 60,
+            bateria_minima_pct: 5.0,
+            ..cfg()
+        });
+        let mut aviso = None;
+        for t in (0..=200).step_by(5) {
+            let pct = if t <= 30 {
+                queda_de_15_nov(t)
+            } else {
+                (64.0 - (t as f32 - 30.0) * 40.0 / 60.0).max(0.0)
+            };
+            if let Some(Evento::Aviso { motivo, .. }) = p.avaliar(t, queda(pct, 100.0, t)) {
+                aviso = Some((t, motivo));
+                break;
+            }
+        }
+        let (t, motivo) = aviso.expect("queda real depois do assentamento precisa avisar");
+        assert!(motivo.contains("autonomia estimada"), "{motivo}");
+        assert!(t >= 60, "aviso antes do assentamento: t={t}");
     }
 }

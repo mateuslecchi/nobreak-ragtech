@@ -204,6 +204,9 @@ fn config() -> Config {
             dados_minimos_s: env("NOBREAK_DESLIGAR_DADOS_MINIMOS_S", "20")
                 .parse()
                 .unwrap_or(20),
+            assentar_s: env("NOBREAK_DESLIGAR_ASSENTAR_S", "60")
+                .parse()
+                .unwrap_or(60),
             arquivo: std::env::var("NOBREAK_ARQUIVO_DESLIGAR")
                 .ok()
                 .filter(|v| !v.trim().is_empty()),

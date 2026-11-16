@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.13.0 (15/nov/2026)
+Primeira queda de energia real com a política de desligamento armada (Moon, 22 min sem rede) e a projeção errou para baixo.
+- **Assentamento da queda** (`NOBREAK_DESLIGAR_ASSENTAR_S`, padrão **60 s**): nos primeiros segundos a bateria é estimada por tensão (`0x87::32`) e afunda por resistência interna, não por consumo — na queda de 15/nov foram **100 %→64 % em 33 s** (68–103 %/min aparentes) contra os **~9,7 %/min** medidos em 30/out. A projeção acreditava nesse afundamento, calculava autonomia de ~40 s e desligava o host em meio minuto. Agora a taxa só passa a valer depois do assentamento, usando como referência a bateria medida no fim dele; durante o transiente valem apenas os gatilhos absolutos (piso de bateria e teto de tempo).
+- **`/api/estado`**: novo campo `assentado` em `desligamento`, para o painel e o diagnóstico distinguirem "projeção confiável" de "ainda no transiente".
+- Testes: o cenário de 15/nov (bateria parada depois do afundamento) passou a ser caso de regressão — sem assentamento ele desliga, com assentamento não, e uma queda de verdade depois do assentamento continua desligando.
+
 ## 0.12.2 (13/nov/2026)
 - **Correção grave:** travamento total do serviço (painel sem resposta, healthcheck estourando, arquivo do NUT congelado) por **dois impasses de lock** introduzidos na 0.12.1:
   - o coletor pegava `quedas` duas vezes na mesma thread — `Mutex` do `std` não é reentrante, então a segunda aquisição esperava para sempre. Era o efeito colateral de tirar o cálculo da autonomia de dentro do bloco de notificações;
