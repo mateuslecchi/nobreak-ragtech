@@ -200,7 +200,7 @@ lugar.** O descritor USB também não tem número de série. Os quadros podem se
 
 ### 7. O serviço no hardware
 
-O binário estático arm64 da 0.14.0 rodou 40 s no Pi com `NOBREAK_PROTOCOLO=auto`. A detecção escolheu a Quadri
+O binário estático arm64 desta versão (gerado pelo `Dockerfile`) rodou 40 s no Pi com `NOBREAK_PROTOCOLO=auto`. A detecção escolheu a Quadri
 na primeira leitura, sem enviar nada. O `/api/estado` ficou conectado e `OL`, com valores coerentes (entrada
 132 V, saída 114,3 V, bateria 13,78 V, carga 3 %, 45 °C), corrente e firmware `null`. O arquivo do NUT saiu sem
 `output.current`.
@@ -211,6 +211,11 @@ na primeira leitura, sem enviar nada. O `/api/estado` ficou conectado e `OL`, co
 rede, meio da queda, primeiro quadro com rede de volta e recarga. Cada um é conferido contra o valor que o
 software oficial mostrava no mesmo instante. Também há testes de soma, quadro corrompido, sincronização no fluxo
 (lixo antes, quadro partido), alarme, log de eventos e arquivo do NUT.
+
+## Capturas
+
+As capturas filtradas (só o nobreak) e os valores de referência alinhados no tempo estão em
+[`capturas/quadri-1200va/`](capturas/quadri-1200va/).
 
 ## Pendências
 
