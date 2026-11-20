@@ -198,7 +198,14 @@ O número de série da etiqueta foi procurado nos quadros e nos arquivos brutos:
 8 bytes (big e little-endian) e em BCD, inteiro e sem o prefixo do código do produto. **Não aparece em nenhum
 lugar.** O descritor USB também não tem número de série. Os quadros podem ser publicados.
 
-### 7. Testes automatizados
+### 7. O serviço no hardware
+
+O binário estático arm64 da 0.14.0 rodou 40 s no Pi com `NOBREAK_PROTOCOLO=auto`. A detecção escolheu a Quadri
+na primeira leitura, sem enviar nada. O `/api/estado` ficou conectado e `OL`, com valores coerentes (entrada
+132 V, saída 114,3 V, bateria 13,78 V, carga 3 %, 45 °C), corrente e firmware `null`. O arquivo do NUT saiu sem
+`output.current`.
+
+### 8. Testes automatizados
 
 `backend/src/quadri.rs` usa seis quadros reais como fixtures: rede normal, carga de 10 %, primeiro quadro sem
 rede, meio da queda, primeiro quadro com rede de volta e recarga. Cada um é conferido contra o valor que o
